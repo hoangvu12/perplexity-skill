@@ -20,7 +20,7 @@ Prefer this over local codebase search when the question depends on recent news,
 
 - `bash`
 - `curl`
-- `jq`
+- `python` (3.9+)
 - A valid Perplexity API key
 
 ## Authentication Flow

@@ -20,6 +20,57 @@ perplexity_require_command() {
   fi
 }
 
+perplexity_resolve_python() {
+  if [[ -n "${PERPLEXITY_PYTHON_BIN:-}" && -x "${PERPLEXITY_PYTHON_BIN}" ]]; then
+    printf '%s' "$PERPLEXITY_PYTHON_BIN"
+    return 0
+  fi
+
+  local candidate
+  for candidate in python python3 py; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+perplexity_python() {
+  local python_bin
+  python_bin="$(perplexity_resolve_python)" || {
+    printf '%s\n' 'Missing required command: python' >&2
+    return 1
+  }
+
+  "$python_bin" "$@"
+}
+
+perplexity_json_get() {
+  local json_file="$1"
+  local key="$2"
+
+  perplexity_python - "$json_file" "$key" <<'PY'
+import json
+import sys
+
+path, key = sys.argv[1], sys.argv[2]
+try:
+    with open(path, 'r', encoding='utf-8') as handle:
+        value = json.load(handle).get(key, '')
+except FileNotFoundError:
+    value = ''
+except Exception:
+    value = ''
+
+if value is None:
+    value = ''
+
+sys.stdout.write(str(value))
+PY
+}
+
 perplexity_strip_wrapping_quotes() {
   local value="$1"
   value="${value#\"}"
@@ -59,9 +110,9 @@ perplexity_load_dotenv() {
 perplexity_load_json_config() {
   [[ -f "$PERPLEXITY_CONFIG_FILE" ]] || return 0
 
-  export PERPLEXITY_API_KEY="${PERPLEXITY_API_KEY:-$(jq -r '.api_key // empty' "$PERPLEXITY_CONFIG_FILE")}"
-  export PERPLEXITY_DEFAULT_MODEL="${PERPLEXITY_DEFAULT_MODEL:-$(jq -r '.default_model // empty' "$PERPLEXITY_CONFIG_FILE")}"
-  export PERPLEXITY_DEFAULT_RECENCY="${PERPLEXITY_DEFAULT_RECENCY:-$(jq -r '.default_recency // empty' "$PERPLEXITY_CONFIG_FILE")}"
+  export PERPLEXITY_API_KEY="${PERPLEXITY_API_KEY:-$(perplexity_json_get "$PERPLEXITY_CONFIG_FILE" api_key)}"
+  export PERPLEXITY_DEFAULT_MODEL="${PERPLEXITY_DEFAULT_MODEL:-$(perplexity_json_get "$PERPLEXITY_CONFIG_FILE" default_model)}"
+  export PERPLEXITY_DEFAULT_RECENCY="${PERPLEXITY_DEFAULT_RECENCY:-$(perplexity_json_get "$PERPLEXITY_CONFIG_FILE" default_recency)}"
 }
 
 perplexity_load_legacy_key() {
@@ -75,7 +126,10 @@ perplexity_validate_key_format() {
 
 perplexity_preflight() {
   perplexity_require_command curl
-  perplexity_require_command jq
+  perplexity_resolve_python >/dev/null || {
+    printf '%s\n' 'Missing required command: python' >&2
+    return 1
+  }
 
   if perplexity_validate_key_format; then
     return 0

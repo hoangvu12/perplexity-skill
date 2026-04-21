@@ -75,25 +75,35 @@ fi
 model="${model:-${PERPLEXITY_DEFAULT_MODEL:-sonar-pro}}"
 recency="${recency:-${PERPLEXITY_DEFAULT_RECENCY:-}}"
 
-request_body="$(jq -n \
-  --arg model "$model" \
-  --arg query "$query" \
-  --arg recency "$recency" \
-  --arg domains "$domains" \
-  --arg search_mode "$search_mode" \
-  --arg reasoning_effort "$reasoning_effort" \
-  '{
-    model: $model,
-    messages: [
-      {role: "system", content: "Be concise. Always cite sources."},
-      {role: "user", content: $query}
+request_body="$(perplexity_python - "$model" "$query" "$recency" "$domains" "$search_mode" "$reasoning_effort" <<'PY'
+import json
+import sys
+
+model, query, recency, domains, search_mode, reasoning_effort = sys.argv[1:7]
+
+payload = {
+    'model': model,
+    'messages': [
+        {'role': 'system', 'content': 'Be concise. Always cite sources.'},
+        {'role': 'user', 'content': query},
     ],
-    return_related_questions: true
-  }
-  + (if $recency != "" then {search_recency_filter: $recency} else {} end)
-  + (if $domains != "" then {search_domain_filter: ($domains | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)))} else {} end)
-  + (if $search_mode != "" then {search_mode: $search_mode} else {} end)
-  + (if $reasoning_effort != "" then {reasoning_effort: $reasoning_effort} else {} end)')"
+    'return_related_questions': True,
+}
+
+if recency:
+    payload['search_recency_filter'] = recency
+if domains:
+    values = [item.strip() for item in domains.split(',') if item.strip()]
+    if values:
+        payload['search_domain_filter'] = values
+if search_mode:
+    payload['search_mode'] = search_mode
+if reasoning_effort:
+    payload['reasoning_effort'] = reasoning_effort
+
+sys.stdout.write(json.dumps(payload))
+PY
+)"
 
 response_file="$(mktemp)"
 trap 'rm -f "$response_file"' EXIT
@@ -104,7 +114,25 @@ if ! http_code="$(curl -sS -o "$response_file" -w "%{http_code}" -X POST "https:
 fi
 
 if [[ "$http_code" != "200" ]]; then
-  message="$(jq -r '.error.message // .message // empty' "$response_file")"
+  message="$(perplexity_python - "$response_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+        data = json.load(handle)
+except Exception:
+    data = {}
+
+message = ''
+if isinstance(data.get('error'), dict):
+    message = data['error'].get('message', '')
+if not message:
+    message = data.get('message', '') or ''
+
+sys.stdout.write(str(message))
+PY
+)"
   case "$http_code" in
     401)
       printf '%s\n' 'Perplexity authentication failed. Re-save the key with bash scripts/save-key.sh <key>.' >&2
@@ -124,16 +152,35 @@ if [[ "$http_code" != "200" ]]; then
 fi
 
 if [[ $raw_json -eq 1 ]]; then
-  jq '.' "$response_file"
+  perplexity_python -m json.tool "$response_file"
   exit 0
 fi
 
-jq -r '
-  .choices[0].message.content,
-  "",
-  (if (.citations // []) | length > 0 then "Sources:" else empty end),
-  ((.citations // [])[] | "- " + .),
-  (if (.related_questions // []) | length > 0 then "" else empty end),
-  (if (.related_questions // []) | length > 0 then "Related:" else empty end),
-  ((.related_questions // [])[] | "- " + .)
-' "$response_file"
+perplexity_python - "$response_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+message = ''
+choices = data.get('choices') or []
+if choices:
+    message = ((choices[0].get('message') or {}).get('content')) or ''
+
+print(message)
+
+citations = data.get('citations') or []
+if citations:
+    print()
+    print('Sources:')
+    for citation in citations:
+        print(f'- {citation}')
+
+related = data.get('related_questions') or []
+if related:
+    print()
+    print('Related:')
+    for item in related:
+        print(f'- {item}')
+PY

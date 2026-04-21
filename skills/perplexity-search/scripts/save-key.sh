@@ -50,9 +50,12 @@ if [[ ! "$api_key" =~ ^pplx-[A-Za-z0-9._-]+$ ]]; then
 fi
 
 perplexity_require_command curl
-perplexity_require_command jq
+perplexity_resolve_python >/dev/null || {
+  printf '%s\n' 'Missing required command: python' >&2
+  exit 1
+}
 
-probe_body="$(jq -n '{model:"sonar",messages:[{role:"user",content:"Reply with the single word ok."}],max_tokens:16,disable_search:true}')"
+probe_body='{"model":"sonar","messages":[{"role":"user","content":"Reply with the single word ok."}],"max_tokens":16,"disable_search":true}'
 probe_file="$(mktemp)"
 trap 'rm -f "$probe_file"' EXIT
 
@@ -69,7 +72,25 @@ case "$http_code" in
     exit 1
     ;;
   *)
-    message="$(jq -r '.error.message // .message // empty' "$probe_file")"
+message="$(perplexity_python - "$probe_file" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+        data = json.load(handle)
+except Exception:
+    data = {}
+
+message = ''
+if isinstance(data.get('error'), dict):
+    message = data['error'].get('message', '')
+if not message:
+    message = data.get('message', '') or ''
+
+sys.stdout.write(str(message))
+PY
+)"
     if [[ -n "$message" ]]; then
       printf 'Perplexity probe failed (%s): %s\n' "$http_code" "$message" >&2
     else
@@ -81,7 +102,21 @@ esac
 
 mkdir -p "$PERPLEXITY_CONFIG_DIR"
 
-config_json="$(jq -n --arg api_key "$api_key" --arg default_model "$default_model" --arg default_recency "$default_recency" '{api_key:$api_key,default_model:$default_model} + (if $default_recency != "" then {default_recency:$default_recency} else {} end)')"
+config_json="$(perplexity_python - "$api_key" "$default_model" "$default_recency" <<'PY'
+import json
+import sys
+
+data = {
+    'api_key': sys.argv[1],
+    'default_model': sys.argv[2],
+}
+
+if sys.argv[3]:
+    data['default_recency'] = sys.argv[3]
+
+sys.stdout.write(json.dumps(data, indent=2))
+PY
+)"
 printf '%s\n' "$config_json" > "$PERPLEXITY_CONFIG_FILE"
 chmod 600 "$PERPLEXITY_CONFIG_FILE" 2>/dev/null || true
 

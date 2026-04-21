@@ -27,7 +27,7 @@ cp -r perplexity-skill/skills/perplexity-search ~/.claude/skills/
 
 - `bash`
 - `curl`
-- `jq`
+- `python` (3.9+)
 - A Perplexity API key from `https://perplexity.ai/settings/api`
 
 ## First Run
