@@ -7,19 +7,19 @@ Portable Agent Skill for Perplexity web search via the Sonar models.
 Primary install path:
 
 ```bash
-npx skills add hggaming/perplexity-skill -g
+npx skills add hoangvu12/perplexity-skill -g
 ```
 
 Target a specific agent:
 
 ```bash
-npx skills add hggaming/perplexity-skill -g -a claude-code
+npx skills add hoangvu12/perplexity-skill -g -a claude-code
 ```
 
 Manual fallback:
 
 ```bash
-git clone https://github.com/hggaming/perplexity-skill
+git clone https://github.com/hoangvu12/perplexity-skill
 cp -r perplexity-skill/skills/perplexity-search ~/.claude/skills/
 ```
 
