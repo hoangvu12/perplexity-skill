@@ -18,14 +18,12 @@ Prefer this over local codebase search when the question depends on recent news,
 
 ## Prerequisites
 
-- `bash`
-- `curl`
-- `python` (3.9+)
+- `bun`
 - A valid Perplexity API key
 
 ## Authentication Flow
 
-Run `bash scripts/ask.sh "<question>"` from this skill directory.
+Run `bun scripts/ask.ts "<question>"` from this skill directory.
 
 The scripts resolve credentials in this order:
 
@@ -37,7 +35,7 @@ The scripts resolve credentials in this order:
 If a script exits after printing `PERPLEXITY_AUTH_REQUIRED`, ask the user for their Perplexity API key from `https://perplexity.ai/settings/api`, then run:
 
 ```bash
-bash scripts/save-key.sh <pplx-key>
+bun scripts/save-key.ts <pplx-key>
 ```
 
 After saving the key, retry the original command.
@@ -47,31 +45,31 @@ After saving the key, retry the original command.
 Default search:
 
 ```bash
-bash scripts/ask.sh "What changed in Next.js this week?"
+bun scripts/ask.ts "What changed in Next.js this week?"
 ```
 
 Pick a model:
 
 ```bash
-bash scripts/ask.sh "Compare the latest React Compiler guidance" --model sonar-reasoning-pro
+bun scripts/ask.ts "Compare the latest React Compiler guidance" --model sonar-reasoning-pro
 ```
 
 Add a recency filter:
 
 ```bash
-bash scripts/ask.sh "What is new in WebGPU?" --recency month
+bun scripts/ask.ts "What is new in WebGPU?" --recency month
 ```
 
 Restrict domains:
 
 ```bash
-bash scripts/ask.sh "What did the CSS Working Group publish?" --domains w3.org,developer.mozilla.org
+bun scripts/ask.ts "What did the CSS Working Group publish?" --domains w3.org,developer.mozilla.org
 ```
 
 Raw JSON response:
 
 ```bash
-bash scripts/ask.sh "Summarize the latest Bun release" --json
+bun scripts/ask.ts "Summarize the latest Bun release" --json
 ```
 
 ## Flags
